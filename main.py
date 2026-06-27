@@ -19,8 +19,13 @@ except ImportError:
 # ==============================================================================
 # 配置区域
 # ==============================================================================
+_server_id = os.getenv("H2P_SERVER_ID", "")
+if not _server_id:
+    print("[ERROR] 未设置环境变量 H2P_SERVER_ID，请在 GitHub Secrets 中配置", flush=True)
+    sys.exit(1)
+
 RENEW_URLS = [
-    "https://host2play.gratis/server/renew?i=6666666-6666-6666-6666-66666666666",
+    f"https://host2play.gratis/server/renew?i={_server_id}",
     # 添加更多链接
 ]
 
