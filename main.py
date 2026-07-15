@@ -70,6 +70,39 @@ def send_tg_photo(token, chat_id, photo_path, caption, parse_mode='HTML'):
         log(f"Telegram 图片通知异常: {e}", "ERROR")
 
 # ==============================================================================
+# WxPusher 通知（格式与 h2p-main 项目保持一致）
+# ==============================================================================
+def wxpush(content):
+    token = os.getenv("WXPUSHER_TOKEN", "")
+    uid = os.getenv("WXPUSHER_UID", "")
+    if not token or not uid:
+        log("📨 WXPUSHER_TOKEN 或 WXPUSHER_UID 未配置，跳过推送", "WARN")
+        return
+    import urllib.request
+    import json as _json
+    payload = _json.dumps({
+        "appToken": token,
+        "content": content,
+        "contentType": 1,
+        "uids": [uid],
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://wxpusher.zjiecode.com/api/send/message",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = _json.loads(resp.read())
+            if result.get("success"):
+                log("📨 WxPusher 推送成功")
+            else:
+                log(f"📨 WxPusher 推送失败: {result}", "WARN")
+    except Exception as e:
+        log(f"📨 WxPusher 推送异常: {e}", "WARN")
+
+# ==============================================================================
 # 页面元素提取
 # ==============================================================================
 def get_server_name(page):
@@ -673,6 +706,7 @@ def main():
         sys.exit(1)
 
     total_success = 0
+    results = []
     for idx, url in enumerate(RENEW_URLS, 1):
         log(f"{'#'*60}")
         log(f"处理第 {idx} 个链接: {url}")
@@ -687,6 +721,21 @@ def main():
             caption = build_notification(False, url, server_name, old_expire, failure_reason=failure_reason)
 
         send_tg_photo(tg_token, tg_chat_id, screenshot, caption, parse_mode='HTML')
+        results.append((server_name, success, old_expire, new_expire, failure_reason))
+
+    lines = ["🔄 Host2Play 自动续期报告"]
+    for server_name, success, old_expire, new_expire, failure_reason in results:
+        if success:
+            if old_expire and new_expire and old_expire != new_expire:
+                lines.append(f"✅ {server_name}: 续期成功\n   {old_expire} → {new_expire}")
+            else:
+                lines.append(f"✅ {server_name}: 续期操作完成（Deletes on: {new_expire}）")
+        else:
+            lines.append(f"❌ {server_name}: 续期失败（{failure_reason}）")
+
+    summary = "\n".join(lines)
+    log(f"\n{summary}")
+    wxpush(summary)
 
     log(f"全部完成，成功 {total_success}/{len(RENEW_URLS)} 个链接")
     if total_success < len(RENEW_URLS):
